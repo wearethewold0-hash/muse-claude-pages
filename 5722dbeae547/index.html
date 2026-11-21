@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111418">
+<title>ストップウォッチ</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: #111418; color: #f2f4f7;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+    padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+    user-select: none; -webkit-user-select: none;
+  }
+  h1 { font-size: 16px; font-weight: 600; color: #8a93a0; margin: 24px 0 0; letter-spacing: .1em; }
+  #time {
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(48px, 17vw, 96px); font-weight: 300;
+    margin: 6vh 0 5vh; letter-spacing: -.02em;
+  }
+  #time .ms { font-size: .55em; color: #8a93a0; }
+  .buttons { display: flex; gap: 40px; margin-bottom: 28px; }
+  button {
+    width: 84px; height: 84px; border-radius: 50%; border: none;
+    font-size: 17px; font-weight: 600; cursor: pointer;
+    box-shadow: 0 0 0 3px #111418, 0 0 0 5px currentColor;
+    transition: transform .08s;
+  }
+  button:active { transform: scale(.94); }
+  button:disabled { opacity: .4; }
+  #left  { background: #2b3038; color: #e6e9ee; }
+  #main.start { background: #123d22; color: #3ddc6f; }
+  #main.stop  { background: #4a1616; color: #ff5c5c; }
+  ul { list-style: none; padding: 0; margin: 0; width: 100%; max-width: 420px; overflow-y: auto; flex: 1; }
+  li {
+    display: flex; justify-content: space-between; padding: 12px 6px;
+    border-top: 1px solid #262b33; font-variant-numeric: tabular-nums; font-size: 17px;
+  }
+  li .no { color: #8a93a0; }
+  li.best .t { color: #3ddc6f; }
+  li.worst .t { color: #ff5c5c; }
+</style>
+</head>
+<body>
+  <h1>STOPWATCH</h1>
+  <div id="time">00:00<span class="ms">.00</span></div>
+  <div class="buttons">
+    <button id="left" disabled>ラップ</button>
+    <button id="main" class="start">スタート</button>
+  </div>
+  <ul id="laps"></ul>
+
+<script>
+  const timeEl = document.getElementById('time');
+  const mainBtn = document.getElementById('main');
+  const leftBtn = document.getElementById('left');
+  const lapsEl = document.getElementById('laps');
+
+  let running = false, startAt = 0, elapsed = 0, lapStart = 0, laps = [], raf = null;
+
+  const now = () => Date.now();
+  const total = () => running ? elapsed + (now() - startAt) : elapsed;
+
+  function fmt(ms) {
+    const cs = Math.floor(ms / 10) % 100;
+    const s = Math.floor(ms / 1000) % 60;
+    const m = Math.floor(ms / 60000) % 60;
+    const h = Math.floor(ms / 3600000);
+    const p = n => String(n).padStart(2, '0');
+    return { main: (h ? h + ':' : '') + p(m) + ':' + p(s), ms: '.' + p(cs) };
+  }
+
+  function render() {
+    const f = fmt(total());
+    timeEl.innerHTML = f.main + '<span class="ms">' + f.ms + '</span>';
+    if (running) raf = requestAnimationFrame(render);
+  }
+
+  function renderLaps() {
+    lapsEl.innerHTML = '';
+    const min = Math.min(...laps), max = Math.max(...laps);
+    for (let i = laps.length - 1; i >= 0; i--) {
+      const li = document.createElement('li');
+      if (laps.length >= 2 && laps[i] === min) li.className = 'best';
+      else if (laps.length >= 2 && laps[i] === max) li.className = 'worst';
+      const f = fmt(laps[i]);
+      li.innerHTML = '<span class="no">ラップ ' + (i + 1) + '</span><span class="t">' + f.main + f.ms + '</span>';
+      lapsEl.appendChild(li);
+    }
+  }
+
+  mainBtn.onclick = () => {
+    if (!running) {
+      running = true; startAt = now();
+      mainBtn.textContent = 'ストップ'; mainBtn.className = 'stop';
+      leftBtn.textContent = 'ラップ'; leftBtn.disabled = false;
+      render();
+    } else {
+      elapsed += now() - startAt; running = false;
+      cancelAnimationFrame(raf); render();
+      mainBtn.textContent = 'スタート'; mainBtn.className = 'start';
+      leftBtn.textContent = 'リセット';
+    }
+  };
+
+  leftBtn.onclick = () => {
+    if (running) {
+      const t = total();
+      laps.push(t - lapStart); lapStart = t;
+      renderLaps();
+    } else {
+      elapsed = 0; lapStart = 0; laps = [];
+      renderLaps(); render();
+      leftBtn.textContent = 'ラップ'; leftBtn.disabled = true;
+    }
+  };
+
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && running) render(); });
+</script>
+</body>
+</html>
