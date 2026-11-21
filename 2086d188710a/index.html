@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>コーヒー屋さんゲーム</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(#f7e9d7, #e8cfae);
+    color: #4a2c17;
+    display: flex; justify-content: center;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  }
+  #app { width: 100%; max-width: 440px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  header { display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
+  header .title { font-size: 20px; }
+  header .stat { background: #fff8ee; border-radius: 999px; padding: 4px 12px; font-size: 15px; box-shadow: 0 2px 0 #d9b98f; }
+  .card { background: #fff8ee; border-radius: 18px; padding: 14px; box-shadow: 0 4px 0 #d9b98f; }
+  #customer { display: flex; align-items: center; gap: 12px; min-height: 96px; }
+  #face { font-size: 56px; line-height: 1; transition: transform .3s; }
+  #bubble { flex: 1; background: #fff; border: 2px solid #e2c49e; border-radius: 14px; padding: 8px 12px; font-size: 15px; position: relative; }
+  #bubble::before { content: ""; position: absolute; left: -10px; top: 50%; transform: translateY(-50%);
+    border: 8px solid transparent; border-right-color: #e2c49e; }
+  .patience { height: 8px; background: #f0dcc2; border-radius: 99px; overflow: hidden; margin-top: 8px; }
+  .patience > div { height: 100%; width: 100%; background: #7cbf6b; transition: width .1s linear, background .3s; }
+  .steps { display: flex; gap: 6px; }
+  .steps div { flex: 1; text-align: center; font-size: 13px; padding: 6px 2px; border-radius: 10px; background: #f0dcc2; color: #9b7b5c; font-weight: bold; }
+  .steps div.active { background: #8b5a2b; color: #fff; }
+  .steps div.done { background: #c9a27a; color: #fff; }
+  #stage { min-height: 290px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+  #stage h2 { margin: 4px 0 0; font-size: 19px; }
+  #stage p { margin: 0; font-size: 14px; color: #7a5638; }
+  .big { font-size: 80px; line-height: 1; transition: transform .1s; }
+  .bar { width: 100%; height: 22px; background: #f0dcc2; border-radius: 99px; overflow: hidden; position: relative; }
+  .bar > .fill { height: 100%; width: 0%; background: linear-gradient(90deg, #b07a45, #6b3f1d); }
+  button {
+    font-family: inherit; font-size: 18px; font-weight: bold; border: none; border-radius: 16px;
+    padding: 14px 22px; background: #8b5a2b; color: #fff; box-shadow: 0 4px 0 #5c3a1a; cursor: pointer;
+    touch-action: manipulation;
+  }
+  button:active { transform: translateY(3px); box-shadow: 0 1px 0 #5c3a1a; }
+  button.wide { width: 100%; }
+  button.green { background: #5d9c4f; box-shadow: 0 4px 0 #3d6d33; }
+  /* カップ */
+  .cupwrap { position: relative; width: 150px; height: 170px; }
+  .cup { position: absolute; bottom: 0; left: 15px; width: 120px; height: 140px; border: 5px solid #6b3f1d; border-top: none;
+    border-radius: 0 0 26px 26px; background: #fff; overflow: hidden; }
+  .cup .coffee { position: absolute; bottom: 0; left: 0; width: 100%; height: 0%; background: #5a3418; }
+  .cup .zone { position: absolute; left: 0; width: 100%; background: rgba(124,191,107,.35); border-top: 2px dashed #4f8a42; border-bottom: 2px dashed #4f8a42; }
+  .handle { position: absolute; right: -2px; bottom: 55px; width: 30px; height: 50px; border: 5px solid #6b3f1d; border-left: none; border-radius: 0 20px 20px 0; }
+  .stream { position: absolute; left: 72px; top: 0; width: 6px; height: 0; background: #5a3418; border-radius: 3px; }
+  .result { font-size: 22px; font-weight: bold; min-height: 30px; }
+  .fade { animation: pop .35s ease; }
+  @keyframes pop { from { transform: scale(.85); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+  .shake { animation: shake .15s; }
+  @keyframes shake { 0%,100% { transform: rotate(0) } 33% { transform: rotate(-12deg) } 66% { transform: rotate(12deg) } }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td { padding: 4px; border-bottom: 1px dashed #e2c49e; }
+  td:last-child { text-align: right; font-weight: bold; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <span class="title">☕ コーヒー屋さん</span>
+    <span class="stat">💰 <span id="money">0</span>円</span>
+  </header>
+
+  <div class="card">
+    <div id="customer">
+      <div id="face">🏪</div>
+      <div style="flex:1">
+        <div id="bubble">いらっしゃいませ！お店をオープンしましょう。</div>
+        <div class="patience" id="patienceWrap" style="visibility:hidden"><div id="patience"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="steps">
+    <div id="st1">① 挽く</div>
+    <div id="st2">② 淹れる</div>
+    <div id="st3">③ 出す</div>
+  </div>
+
+  <div class="card" id="stage"></div>
+
+  <div style="text-align:center;font-size:13px;color:#8a6a4c">お客さん <span id="count">0</span> / 5 人</div>
+</div>
+
+<script>
+const CUSTOMERS = ["👩", "👨", "👵", "👴", "🧑‍💼", "👩‍🎓", "🧔", "👧", "🐱", "🐻"];
+const ORDERS = [
+  { name: "うすめ", target: 0.45, msg: "うすめのコーヒーを少なめでお願いします。" },
+  { name: "ふつう", target: 0.65, msg: "ふつうのコーヒーをひとつください！" },
+  { name: "たっぷり", target: 0.85, msg: "たっぷりのコーヒーが飲みたいな〜。" },
+];
+const TOTAL = 5;
+const GRIND_TAPS = 12;
+const ZONE = 0.12;            // 適量ゾーンの幅（カップの高さに対する割合）
+const PATIENCE_SEC = 25;
+
+let money = 0, served = 0, history = [];
+let order = null, patience = 1, patienceTimer = null, step = 0;
+let grindCount = 0, fillLevel = 0, pouring = false, pourTimer = null, brewScore = 0;
+
+const $ = id => document.getElementById(id);
+const stage = $("stage");
+
+function setSteps(n) {
+  step = n;
+  [1,2,3].forEach(i => {
+    const el = $("st" + i);
+    el.className = i < n ? "done" : i === n ? "active" : "";
+  });
+}
+
+function say(text, face) {
+  $("bubble").textContent = text;
+  if (face) $("face").textContent = face;
+  $("bubble").classList.remove("fade"); void $("bubble").offsetWidth; $("bubble").classList.add("fade");
+}
+
+/* ---------- タイトル ---------- */
+function showTitle() {
+  setSteps(0);
+  $("patienceWrap").style.visibility = "hidden";
+  stage.innerHTML = `
+    <div class="big">☕</div>
+    <h2>コーヒー屋さんゲーム</h2>
+    <p>お客さん5人にコーヒーを出そう！<br>
+    ① 豆をタップして挽く<br>② ボタンを長押しで注ぎ、緑のラインで止める<br>③ お客さんに出す</p>
+    <p>早く・ちょうどよく出すとチップがもらえるよ。</p>
+    <button class="wide" id="startBtn">お店をオープン</button>`;
+  $("startBtn").onclick = startGame;
+}
+
+function startGame() {
+  money = 0; served = 0; history = [];
+  $("money").textContent = 0;
+  nextCustomer();
+}
+
+/* ---------- お客さん ---------- */
+function nextCustomer() {
+  if (served >= TOTAL) return showEnd();
+  $("count").textContent = served + 1;
+  order = ORDERS[Math.floor(Math.random() * ORDERS.length)];
+  const face = CUSTOMERS[Math.floor(Math.random() * CUSTOMERS.length)];
+  say(order.msg, face);
+  $("face").classList.remove("fade"); void $("face").offsetWidth; $("face").classList.add("fade");
+  startPatience();
+  startGrind();
+}
+
+function startPatience() {
+  patience = 1;
+  $("patienceWrap").style.visibility = "visible";
+  clearInterval(patienceTimer);
+  patienceTimer = setInterval(() => {
+    patience -= 0.1 / PATIENCE_SEC;
+    const bar = $("patience");
+    bar.style.width = Math.max(0, patience * 100) + "%";
+    bar.style.background = patience > 0.5 ? "#7cbf6b" : patience > 0.25 ? "#e3b53c" : "#d9604c";
+    if (patience <= 0) customerLeft();
+  }, 100);
+}
+
+function stopPatience() { clearInterval(patienceTimer); }
+
+function customerLeft() {
+  stopPatience();
+  stopPour();
+  served++;
+  history.push({ name: order.name, pay: 0, note: "帰っちゃった…" });
+  say("もう待てないよ…また今度ね。", "😤");
+  stage.innerHTML = `<div class="big">💨</div><h2>お客さんが帰ってしまった…</h2>
+    <p>次はもっと早く出そう！</p><button class="wide" id="nextBtn">次のお客さん</button>`;
+  $("nextBtn").onclick = nextCustomer;
+}
+
+/* ---------- ① 挽く ---------- */
+function startGrind() {
+  setSteps(1);
+  grindCount = 0;
+  stage.innerHTML = `
+    <h2>① コーヒー豆を挽こう</h2>
+    <p>ミルを ${GRIND_TAPS} 回タップ！</p>
+    <div class="big" id="mill" style="cursor:pointer">🫘</div>
+    <div class="bar"><div class="fill" id="grindBar"></div></div>
+    <p id="grindTxt">0 / ${GRIND_TAPS}</p>
+    <button class="wide" id="grindBtn">ゴリゴリ挽く！</button>`;
+  const tap = (e) => {
+    e.preventDefault();
+    if (step !== 1) return;
+    grindCount++;
+    const m = $("mill");
+    m.classList.remove("shake"); void m.offsetWidth; m.classList.add("shake");
+    $("grindBar").style.width = (grindCount / GRIND_TAPS * 100) + "%";
+    $("grindTxt").textContent = `${grindCount} / ${GRIND_TAPS}`;
+    if (grindCount >= GRIND_TAPS) {
+      m.textContent = "🟤";
+      $("grindTxt").textContent = "いい香り！挽けました";
+      setTimeout(startBrew, 500);
+    }
+  };
+  $("mill").addEventListener("pointerdown", tap);
+  $("grindBtn").addEventListener("pointerdown", tap);
+}
+
+/* ---------- ② 淹れる ---------- */
+function startBrew() {
+  setSteps(2);
+  fillLevel = 0;
+  const lo = order.target - ZONE / 2, hi = order.target + ZONE / 2;
+  stage.innerHTML = `
+    <h2>② コーヒーを淹れよう</h2>
+    <p>「${order.name}」：ボタンを押している間だけ注げます。<br>緑のラインの中で指をはなしてね。</p>
+    <div class="cupwrap">
+      <div class="stream" id="stream"></div>
+      <div class="cup">
+        <div class="zone" style="bottom:${lo*100}%;height:${ZONE*100}%"></div>
+        <div class="coffee" id="coffee"></div>
+      </div>
+      <div class="handle"></div>
+    </div>
+    <div class="result" id="brewResult"></div>
+    <button class="wide" id="pourBtn">長押しで注ぐ ☕</button>`;
+  const btn = $("pourBtn");
+  let finished = false;
+  const down = (e) => {
+    e.preventDefault();
+    if (finished || step !== 2) return;
+    pouring = true;
+    $("stream").style.height = "60px";
+    pourTimer = setInterval(() => {
+      fillLevel += 0.009;
+      $("coffee").style.height = Math.min(fillLevel, 1) * 100 + "%";
+      if (fillLevel >= 1.0) { up(); }
+    }, 30);
+  };
+  const up = () => {
+    if (!pouring || finished) return;
+    stopPour();
+    if (fillLevel < 0.08) return; // ちょっと触れただけなら無視
+    finished = true;
+    const diff = Math.abs(fillLevel - order.target);
+    let label;
+    if (fillLevel >= 1.0) { brewScore = 0; label = "あふれた！😱"; }
+    else if (diff <= ZONE / 2 * 0.4) { brewScore = 3; label = "パーフェクト！✨"; }
+    else if (diff <= ZONE / 2) { brewScore = 2; label = "いい感じ！👍"; }
+    else if (diff <= ZONE) { brewScore = 1; label = fillLevel < order.target ? "ちょっと少ない…" : "ちょっと多い…"; }
+    else { brewScore = 0; label = fillLevel < order.target ? "少なすぎ！" : "多すぎ！"; }
+    $("brewResult").textContent = label;
+    btn.textContent = "③ お客さんに出す →";
+    btn.classList.add("green");
+    btn.onpointerdown = null;
+    setTimeout(() => { btn.onclick = startServe; }, 150);
+  };
+  btn.onpointerdown = down;
+  btn.addEventListener("pointerup", up);
+  btn.addEventListener("pointerleave", up);
+  btn.addEventListener("pointercancel", up);
+  btn.addEventListener("contextmenu", e => e.preventDefault());
+}
+
+function stopPour() {
+  pouring = false;
+  clearInterval(pourTimer);
+  const s = $("stream"); if (s) s.style.height = "0";
+}
+
+/* ---------- ③ 出す ---------- */
+function startServe() {
+  setSteps(3);
+  stage.innerHTML = `
+    <h2>③ お客さんにコーヒーを出そう</h2>
+    <p>タップしてお出しします。</p>
+    <div class="big" id="serveCup" style="cursor:pointer">☕</div>
+    <button class="wide green" id="serveBtn">お待たせしました！</button>`;
+  const serve = () => {
+    if (step !== 3) return;
+    step = 4;
+    stopPatience();
+    served++;
+    const price = [150, 300, 400, 500][brewScore];
+    const tip = brewScore >= 2 ? Math.round(patience * 200 / 10) * 10 : 0;
+    const pay = price + tip;
+    money += pay;
+    $("money").textContent = money;
+    const reactions = [
+      ["😖", "うーん、ちょっとイメージと違うかな…"],
+      ["🙂", "まあまあかな。ありがとう。"],
+      ["😊", "おいしい！ありがとう！"],
+      ["😍", "最高においしい！また来ます！"],
+    ];
+    const [face, line] = reactions[brewScore];
+    say(line, face);
+    history.push({ name: order.name, pay, note: ["いまいち", "まあまあ", "おいしい", "最高！"][brewScore] });
+    stage.innerHTML = `
+      <div class="big fade">${face}</div>
+      <h2>${pay} 円いただきました！</h2>
+      <p>代金 ${price}円${tip ? ` ＋ チップ ${tip}円（早く出せた！）` : ""}</p>
+      <button class="wide" id="nextBtn">${served >= TOTAL ? "結果を見る" : "次のお客さん"}</button>`;
+    $("nextBtn").onclick = nextCustomer;
+  };
+  $("serveCup").onclick = serve;
+  $("serveBtn").onclick = serve;
+}
+
+/* ---------- 結果 ---------- */
+function showEnd() {
+  setSteps(0);
+  stopPatience();
+  $("patienceWrap").style.visibility = "hidden";
+  const best = Math.max(money, Number(localStorage.getItem("coffeeBest") || 0));
+  localStorage.setItem("coffeeBest", best);
+  let rank = money >= 2800 ? "伝説のバリスタ 🏆" : money >= 2200 ? "人気カフェの店長 🌟" : money >= 1500 ? "一人前のバリスタ ☕" : "見習いバリスタ 🔰";
+  say("本日の営業は終了です。おつかれさまでした！", "🏪");
+  stage.innerHTML = `
+    <h2>本日の売上：${money} 円</h2>
+    <p>ランク：<b>${rank}</b></p>
+    <table>${history.map((h, i) => `<tr><td>${i + 1}人目（${h.name}）</td><td>${h.note}</td><td>${h.pay}円</td></tr>`).join("")}</table>
+    <p>ベスト記録：${best} 円</p>
+    <button class="wide" id="againBtn">もう一度あそぶ</button>`;
+  $("againBtn").onclick = startGame;
+}
+
+showTitle();
+</script>
+</body>
+</html>
